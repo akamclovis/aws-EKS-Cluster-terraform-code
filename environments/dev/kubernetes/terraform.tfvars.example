@@ -4,3 +4,7 @@ state_bucket_name   = "<TERRAFORM_STATE_BUCKET>"
 state_bucket_region = "us-east-1"
 core_state_key      = "eks-platform/dev/core.tfstate"
 platform_state_key  = "eks-platform/dev/platform.tfstate"
+
+route53_zone_name          = "example.com"
+external_dns_domain        = "example.com"
+external_dns_chart_version = "1.21.1"

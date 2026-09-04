@@ -62,3 +62,18 @@ output "alb_controller_pod_identity_association_id" {
   description = "ID of the AWS Load Balancer Controller EKS Pod Identity association."
   value       = module.alb_controller.alb_controller_pod_identity_association_id
 }
+
+output "external_dns_role_arn" {
+  description = "ARN of the IAM role used by ExternalDNS through EKS Pod Identity."
+  value       = module.external_dns.external_dns_role_arn
+}
+
+output "external_dns_policy_arn" {
+  description = "ARN of the IAM policy for ExternalDNS."
+  value       = module.external_dns.external_dns_policy_arn
+}
+
+output "external_dns_pod_identity_association_id" {
+  description = "ID of the ExternalDNS EKS Pod Identity association."
+  value       = module.external_dns.external_dns_pod_identity_association_id
+}

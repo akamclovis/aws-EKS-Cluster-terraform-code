@@ -51,3 +51,19 @@ variable "alb_controller_image_tag" {
   type        = string
   default     = "v3.5.0"
 }
+
+variable "route53_zone_name" {
+  description = "Public Route53 hosted zone name used by ExternalDNS. Set only in ignored local terraform.tfvars."
+  type        = string
+}
+
+variable "external_dns_domain" {
+  description = "DNS domain suffix ExternalDNS is allowed to manage. Set only in ignored local terraform.tfvars."
+  type        = string
+}
+
+variable "external_dns_chart_version" {
+  description = "Pinned ExternalDNS Helm chart version."
+  type        = string
+  default     = "1.21.1"
+}
