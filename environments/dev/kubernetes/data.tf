@@ -23,3 +23,8 @@ data "terraform_remote_state" "platform" {
 data "aws_eks_cluster" "current" {
   name = data.terraform_remote_state.core.outputs.cluster_name
 }
+
+data "aws_route53_zone" "external_dns" {
+  name         = var.route53_zone_name
+  private_zone = false
+}

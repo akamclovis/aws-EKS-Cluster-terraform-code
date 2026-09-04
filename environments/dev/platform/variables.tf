@@ -75,3 +75,8 @@ variable "efs_csi_addon_version" {
   type        = string
   default     = null
 }
+
+variable "route53_zone_name" {
+  description = "Public Route53 hosted zone name ExternalDNS is allowed to manage. Set only in ignored local terraform.tfvars."
+  type        = string
+}

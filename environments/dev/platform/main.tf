@@ -36,3 +36,12 @@ module "alb_controller" {
     module.eks_addons
   ]
 }
+
+module "external_dns" {
+  source = "../../../modules/external-dns"
+
+  name_prefix     = local.name_prefix
+  cluster_name    = data.terraform_remote_state.core.outputs.cluster_name
+  route53_zone_id = data.aws_route53_zone.external_dns.zone_id
+  tags            = local.common_tags
+}

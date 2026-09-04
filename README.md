@@ -19,12 +19,14 @@ Implemented phases:
 - AWS Load Balancer Controller
 - Argo CD
 - nginx GitOps demo Application
+- ExternalDNS
 - Helm releases
 
 Not yet implemented:
 
-- Route 53
-- ACM
+- Production Route 53 architecture
+- ACM certificate provisioning
+- nginx demo HTTPS Ingress hostname
 - Production infrastructure
 
 ## Directory Structure
@@ -39,6 +41,7 @@ aws-EKS-Cluster-terraform-code/
 │   ├── eks-addons/
 │   ├── efs/
 │   ├── alb-controller/
+│   ├── external-dns/
 │   └── argocd/
 ├── environments/
 │   ├── dev/
@@ -61,8 +64,8 @@ aws-EKS-Cluster-terraform-code/
 | --- | --- | --- |
 | `bootstrap/remote-state` | local/bootstrap state | S3 state bucket bootstrap only |
 | `environments/dev/core` | `eks-platform/dev/core.tfstate` | VPC, subnets, routes, NAT, EKS cluster, access entries, node IAM role, managed node group, temporary node-role CNI bootstrap attachment |
-| `environments/dev/platform` | `eks-platform/dev/platform.tfstate` | EKS managed add-ons, VPC CNI Pod Identity role/association, EFS, EFS CSI IAM role/association, EFS CSI add-on, AWS Load Balancer Controller IAM role/policy/Pod Identity association |
-| `environments/dev/kubernetes` | `eks-platform/dev/kubernetes.tfstate` | Kubernetes runtime/bootstrap resources: EFS StorageClass, AWS Load Balancer Controller ServiceAccount and Helm release, Argo CD namespace and Helm release |
+| `environments/dev/platform` | `eks-platform/dev/platform.tfstate` | EKS managed add-ons, VPC CNI Pod Identity role/association, EFS, EFS CSI IAM role/association, EFS CSI add-on, AWS Load Balancer Controller IAM role/policy/Pod Identity association, ExternalDNS IAM role/policy/Pod Identity association |
+| `environments/dev/kubernetes` | `eks-platform/dev/kubernetes.tfstate` | Kubernetes runtime/bootstrap resources: EFS StorageClass, AWS Load Balancer Controller ServiceAccount and Helm release, ExternalDNS namespace/ServiceAccount/Helm release, Argo CD namespace and Helm release |
 | `environments/dev/gitops` | `eks-platform/dev/gitops.tfstate` | Argo CD Application declarations, currently `nginx-demo` |
 
 No resource is intentionally owned by more than one Terraform root.
@@ -96,8 +99,8 @@ No DynamoDB locking table is used.
 flowchart TD
   Bootstrap["bootstrap/remote-state"]
   Core["dev/core<br/>VPC + EKS + node group"]
-  Platform["dev/platform<br/>EKS add-ons + Pod Identity + EFS + ALB Controller IAM"]
-  Kubernetes["dev/kubernetes<br/>StorageClass + ALB Controller Helm + Argo CD Helm"]
+  Platform["dev/platform<br/>EKS add-ons + Pod Identity + EFS + ALB Controller IAM + ExternalDNS IAM"]
+  Kubernetes["dev/kubernetes<br/>StorageClass + ALB Controller Helm + ExternalDNS Helm + Argo CD Helm"]
   GitOps["dev/gitops<br/>Argo CD Applications"]
 
   Bootstrap --> Core
@@ -205,7 +208,9 @@ The Argo CD Helm release is also in this layer so its CRDs are established befor
 ```bash
 kubectl get storageclass
 kubectl get serviceaccount aws-load-balancer-controller -n kube-system
+kubectl get deployment,pods -n external-dns
 helm list -n kube-system
+helm list -n external-dns
 helm list -n argocd
 ```
 
@@ -225,6 +230,12 @@ Expected Argo CD release:
 
 ```text
 argocd
+```
+
+Expected ExternalDNS release:
+
+```text
+external-dns
 ```
 
 10. Build the GitOps Application layer after the nginx manifests are committed and pushed:
@@ -325,5 +336,7 @@ Do not silently upgrade add-ons as part of unrelated changes.
 - EFS mount targets use stable Availability Zone keys from `private_subnet_ids_by_az`, not unknown subnet IDs as `for_each` keys.
 - Broad module-level dependencies are avoided except `module.eks depends_on = [module.networking]`, which intentionally ensures NAT/private routing are complete before private nodes bootstrap.
 - AWS Load Balancer Controller uses EKS Pod Identity, not IRSA. The ServiceAccount has no `eks.amazonaws.com/role-arn` annotation.
+- ExternalDNS uses EKS Pod Identity, not IRSA or node-role Route53 permissions. Its IAM policy can change records only in the configured public hosted zone.
 - The controller webhook listens on TCP 9443. No extra Terraform-managed security-group rule is currently needed because the EKS-created cluster security group is attached to the managed node group and includes its default self-referencing inbound rule.
+- This repository is public. Real DNS names, hosted-zone IDs, ACM certificate ARNs, account IDs, public IPs, and other environment-specific values must stay out of tracked files. Phase 8B DNS variables are set in ignored local `terraform.tfvars` files. A Git-managed nginx Ingress hostname cannot remain private if committed as plain YAML; use a private GitOps configuration source or a generated/overlay workflow before adding the real hostname.
 - Do not use `terraform -target`, sleeps, `null_resource`, or manual console changes for normal lifecycle ordering.
