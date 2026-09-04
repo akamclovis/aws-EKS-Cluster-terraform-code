@@ -5,7 +5,7 @@ resource "kubernetes_manifest" "nginx_demo_application" {
 
     metadata = {
       name      = "nginx-demo"
-      namespace = kubernetes_namespace_v1.argocd.metadata[0].name
+      namespace = "argocd"
       finalizers = [
         "resources-finalizer.argocd.argoproj.io"
       ]
@@ -36,8 +36,4 @@ resource "kubernetes_manifest" "nginx_demo_application" {
       }
     }
   }
-
-  depends_on = [
-    helm_release.argocd
-  ]
 }

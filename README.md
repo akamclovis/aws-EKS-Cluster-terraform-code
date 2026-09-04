@@ -17,11 +17,12 @@ Implemented phases:
 - EFS CSI driver
 - Kubernetes EFS StorageClass
 - AWS Load Balancer Controller
+- Argo CD
+- nginx GitOps demo Application
 - Helm releases
 
 Not yet implemented:
 
-- Argo CD
 - Route 53
 - ACM
 - Production infrastructure
@@ -43,9 +44,13 @@ aws-EKS-Cluster-terraform-code/
 │   ├── dev/
 │   │   ├── core/
 │   │   ├── platform/
-│   │   └── kubernetes/
+│   │   ├── kubernetes/
+│   │   └── gitops/
 │   └── prod/
 │       └── README.md
+├── gitops/
+│   └── apps/
+│       └── nginx-demo/
 ├── helm-values/
 └── README.md
 ```
@@ -57,7 +62,8 @@ aws-EKS-Cluster-terraform-code/
 | `bootstrap/remote-state` | local/bootstrap state | S3 state bucket bootstrap only |
 | `environments/dev/core` | `eks-platform/dev/core.tfstate` | VPC, subnets, routes, NAT, EKS cluster, access entries, node IAM role, managed node group, temporary node-role CNI bootstrap attachment |
 | `environments/dev/platform` | `eks-platform/dev/platform.tfstate` | EKS managed add-ons, VPC CNI Pod Identity role/association, EFS, EFS CSI IAM role/association, EFS CSI add-on, AWS Load Balancer Controller IAM role/policy/Pod Identity association |
-| `environments/dev/kubernetes` | `eks-platform/dev/kubernetes.tfstate` | Kubernetes runtime resources, including the EFS StorageClass, AWS Load Balancer Controller ServiceAccount, and AWS Load Balancer Controller Helm release |
+| `environments/dev/kubernetes` | `eks-platform/dev/kubernetes.tfstate` | Kubernetes runtime/bootstrap resources: EFS StorageClass, AWS Load Balancer Controller ServiceAccount and Helm release, Argo CD namespace and Helm release |
+| `environments/dev/gitops` | `eks-platform/dev/gitops.tfstate` | Argo CD Application declarations, currently `nginx-demo` |
 
 No resource is intentionally owned by more than one Terraform root.
 
@@ -91,15 +97,17 @@ flowchart TD
   Bootstrap["bootstrap/remote-state"]
   Core["dev/core<br/>VPC + EKS + node group"]
   Platform["dev/platform<br/>EKS add-ons + Pod Identity + EFS + ALB Controller IAM"]
-  Kubernetes["dev/kubernetes<br/>StorageClass + ALB Controller Helm"]
+  Kubernetes["dev/kubernetes<br/>StorageClass + ALB Controller Helm + Argo CD Helm"]
+  GitOps["dev/gitops<br/>Argo CD Applications"]
 
   Bootstrap --> Core
   Core --> Platform
   Core --> Kubernetes
   Platform --> Kubernetes
+  Kubernetes --> GitOps
 ```
 
-`dev/core` has no dependency on platform or Kubernetes state. `dev/platform` consumes only core outputs. `dev/kubernetes` consumes core outputs for cluster identity and platform outputs for AWS-side integrations such as the EFS filesystem ID and AWS Load Balancer Controller Pod Identity resources.
+`dev/core` has no dependency on platform, Kubernetes, or GitOps state. `dev/platform` consumes only core outputs. `dev/kubernetes` consumes core outputs for cluster identity and platform outputs for AWS-side integrations such as the EFS filesystem ID and AWS Load Balancer Controller Pod Identity resources. `dev/gitops` runs after `dev/kubernetes` so Argo CD CRDs exist before Terraform plans Argo CD `Application` resources.
 
 ## Build Workflow
 
@@ -180,7 +188,7 @@ kubectl get nodes
 kubectl get pods -n kube-system
 ```
 
-8. Build the Kubernetes runtime layer:
+8. Build the Kubernetes runtime/bootstrap layer:
 
 ```bash
 cd environments/dev/kubernetes
@@ -190,6 +198,7 @@ terraform plan -out=tfplan-kubernetes
 ```
 
 The AWS Load Balancer Controller Helm release is in this layer because it creates Kubernetes resources. Its IAM policy, IAM role, and Pod Identity association are created first by `dev/platform`.
+The Argo CD Helm release is also in this layer so its CRDs are established before GitOps Application objects are planned in the next layer.
 
 9. After applying Kubernetes resources, validate:
 
@@ -197,6 +206,7 @@ The AWS Load Balancer Controller Helm release is in this layer because it create
 kubectl get storageclass
 kubectl get serviceaccount aws-load-balancer-controller -n kube-system
 helm list -n kube-system
+helm list -n argocd
 ```
 
 Expected StorageClass:
@@ -211,14 +221,32 @@ Expected AWS Load Balancer Controller release:
 aws-load-balancer-controller
 ```
 
-10. Run the EFS PVC writer/reader persistence test.
+Expected Argo CD release:
 
-11. Run `terraform plan` in all three dev roots:
+```text
+argocd
+```
+
+10. Build the GitOps Application layer after the nginx manifests are committed and pushed:
+
+```bash
+cd environments/dev/gitops
+terraform init -reconfigure
+terraform validate
+terraform plan -out=tfplan-gitops
+```
+
+This layer creates Argo CD `Application` resources only. The Kubernetes workloads under `gitops/apps/` are reconciled by Argo CD from Git and are not Terraform-managed.
+
+11. Run the EFS PVC writer/reader persistence test.
+
+12. Run `terraform plan` in all four dev roots:
 
 ```text
 environments/dev/core
 environments/dev/platform
 environments/dev/kubernetes
+environments/dev/gitops
 ```
 
 Expected result in each root:
@@ -231,9 +259,10 @@ No changes.
 
 Destroy development infrastructure in this order:
 
-1. `environments/dev/kubernetes`
-2. `environments/dev/platform`
-3. `environments/dev/core`
+1. `environments/dev/gitops`
+2. `environments/dev/kubernetes`
+3. `environments/dev/platform`
+4. `environments/dev/core`
 
 Keep:
 
@@ -291,7 +320,8 @@ Do not silently upgrade add-ons as part of unrelated changes.
 ## Design Notes
 
 - `dev/core` and `dev/platform` are AWS-provider-only roots.
-- `dev/kubernetes` is the only root that configures the Kubernetes and Helm providers.
+- `dev/kubernetes` configures Kubernetes and Helm providers for runtime/bootstrap resources that do not require custom Argo CD resources at plan time.
+- `dev/gitops` configures the Kubernetes provider for Argo CD Application resources and is run only after Argo CD CRDs exist.
 - EFS mount targets use stable Availability Zone keys from `private_subnet_ids_by_az`, not unknown subnet IDs as `for_each` keys.
 - Broad module-level dependencies are avoided except `module.eks depends_on = [module.networking]`, which intentionally ensures NAT/private routing are complete before private nodes bootstrap.
 - AWS Load Balancer Controller uses EKS Pod Identity, not IRSA. The ServiceAccount has no `eks.amazonaws.com/role-arn` annotation.
