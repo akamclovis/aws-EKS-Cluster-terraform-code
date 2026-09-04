@@ -1,0 +1,14 @@
+project_name = "eks-platform"
+environment  = "dev"
+aws_region   = "us-east-1"
+owner        = "your-name"
+
+state_bucket_name   = "<TERRAFORM_STATE_BUCKET>"
+state_bucket_region = "us-east-1"
+core_state_key      = "eks-platform/dev/core.tfstate"
+
+vpc_cni_addon_version            = "<PINNED_VERSION>"
+coredns_addon_version            = "<PINNED_VERSION>"
+kube_proxy_addon_version         = "<PINNED_VERSION>"
+pod_identity_agent_addon_version = "<PINNED_VERSION>"
+efs_csi_addon_version            = "<PINNED_VERSION>"

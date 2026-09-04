@@ -38,3 +38,12 @@ Thumbs.db
 .vscode/
 
 # Keep .terraform.lock.hcl committed for reproducible provider selections.
+
+
+# Terraform environment-specific values
+*.tfvars
+*.auto.tfvars
+
+# Keep sanitized examples
+!*.tfvars.example
+!*.auto.tfvars.example
