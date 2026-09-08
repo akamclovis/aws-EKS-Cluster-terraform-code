@@ -1,0 +1,13 @@
+project_name = "eks-platform"
+environment  = "dev"
+aws_region   = "us-east-1"
+
+state_bucket_name   = "<TERRAFORM_STATE_BUCKET>"
+state_bucket_region = "us-east-1"
+core_state_key      = "eks-platform/dev/core.tfstate"
+
+monitoring_namespace                 = "monitoring"
+kube_prometheus_stack_chart_version  = "89.2.0"
+loki_chart_version                   = "18.7.6"
+alloy_chart_version                  = "1.12.1"
+grafana_admin_password               = "<LOCAL_ONLY_OPTIONAL_PASSWORD>"

@@ -1,0 +1,6 @@
+resource "kubernetes_namespace_v1" "monitoring" {
+  metadata {
+    name   = var.monitoring_namespace
+    labels = local.labels
+  }
+}

@@ -21,12 +21,14 @@ Implemented phases:
 - nginx GitOps demo Application
 - ExternalDNS
 - Helm releases
+- Observability scaffolding
 
 Not yet implemented:
 
 - Production Route 53 architecture
 - ACM certificate provisioning
 - nginx demo HTTPS Ingress hostname
+- Persistent monitoring storage
 - Production infrastructure
 
 ## Directory Structure
@@ -48,6 +50,7 @@ aws-EKS-Cluster-terraform-code/
 │   │   ├── core/
 │   │   ├── platform/
 │   │   ├── kubernetes/
+│   │   ├── observability/
 │   │   └── gitops/
 │   └── prod/
 │       └── README.md
@@ -66,13 +69,14 @@ aws-EKS-Cluster-terraform-code/
 | `environments/dev/core` | `eks-platform/dev/core.tfstate` | VPC, subnets, routes, NAT, EKS cluster, access entries, node IAM role, managed node group, temporary node-role CNI bootstrap attachment |
 | `environments/dev/platform` | `eks-platform/dev/platform.tfstate` | EKS managed add-ons, VPC CNI Pod Identity role/association, EFS, EFS CSI IAM role/association, EFS CSI add-on, AWS Load Balancer Controller IAM role/policy/Pod Identity association, ExternalDNS IAM role/policy/Pod Identity association |
 | `environments/dev/kubernetes` | `eks-platform/dev/kubernetes.tfstate` | Kubernetes runtime/bootstrap resources: EFS StorageClass, AWS Load Balancer Controller ServiceAccount and Helm release, ExternalDNS namespace/ServiceAccount/Helm release, Argo CD namespace and Helm release |
+| `environments/dev/observability` | `eks-platform/dev/observability.tfstate` | Observability namespace and Helm releases for kube-prometheus-stack, Loki, and Grafana Alloy |
 | `environments/dev/gitops` | `eks-platform/dev/gitops.tfstate` | Argo CD Application declarations, currently `nginx-demo` |
 
 No resource is intentionally owned by more than one Terraform root.
 
 ## Backend
 
-Development roots use the S3 state bucket:
+Development roots use the S3 state bucket created by `bootstrap/remote-state`:
 
 ```text
 eks-platform-terraform-state-945788750616
@@ -101,16 +105,18 @@ flowchart TD
   Core["dev/core<br/>VPC + EKS + node group"]
   Platform["dev/platform<br/>EKS add-ons + Pod Identity + EFS + ALB Controller IAM + ExternalDNS IAM"]
   Kubernetes["dev/kubernetes<br/>StorageClass + ALB Controller Helm + ExternalDNS Helm + Argo CD Helm"]
+  Observability["dev/observability<br/>Prometheus + Grafana + Alertmanager + Loki + Alloy"]
   GitOps["dev/gitops<br/>Argo CD Applications"]
 
   Bootstrap --> Core
   Core --> Platform
   Core --> Kubernetes
   Platform --> Kubernetes
+  Kubernetes --> Observability
   Kubernetes --> GitOps
 ```
 
-`dev/core` has no dependency on platform, Kubernetes, or GitOps state. `dev/platform` consumes only core outputs. `dev/kubernetes` consumes core outputs for cluster identity and platform outputs for AWS-side integrations such as the EFS filesystem ID and AWS Load Balancer Controller Pod Identity resources. `dev/gitops` runs after `dev/kubernetes` so Argo CD CRDs exist before Terraform plans Argo CD `Application` resources.
+`dev/core` has no dependency on platform, Kubernetes, observability, or GitOps state. `dev/platform` consumes only core outputs. `dev/kubernetes` consumes core outputs for cluster identity and platform outputs for AWS-side integrations such as the EFS filesystem ID and AWS Load Balancer Controller Pod Identity resources. `dev/observability` consumes core outputs to connect to the EKS API after Kubernetes bootstrap resources are ready. `dev/gitops` runs after `dev/kubernetes` so Argo CD CRDs exist before Terraform plans Argo CD `Application` resources.
 
 ## Build Workflow
 
@@ -238,7 +244,18 @@ Expected ExternalDNS release:
 external-dns
 ```
 
-10. Build the GitOps Application layer after the nginx manifests are committed and pushed:
+10. Build the observability layer:
+
+```bash
+cd environments/dev/observability
+terraform init -reconfigure
+terraform validate
+terraform plan -out=tfplan-observability
+```
+
+Phase 9A creates the layer and chart scaffolding only. Persistent monitoring storage is intentionally deferred to Phase 9B.
+
+11. Build the GitOps Application layer after the nginx manifests are committed and pushed:
 
 ```bash
 cd environments/dev/gitops
@@ -249,14 +266,15 @@ terraform plan -out=tfplan-gitops
 
 This layer creates Argo CD `Application` resources only. The Kubernetes workloads under `gitops/apps/` are reconciled by Argo CD from Git and are not Terraform-managed.
 
-11. Run the EFS PVC writer/reader persistence test.
+12. Run the EFS PVC writer/reader persistence test.
 
-12. Run `terraform plan` in all four dev roots:
+13. Run `terraform plan` in all five dev roots:
 
 ```text
 environments/dev/core
 environments/dev/platform
 environments/dev/kubernetes
+environments/dev/observability
 environments/dev/gitops
 ```
 
@@ -271,9 +289,10 @@ No changes.
 Destroy development infrastructure in this order:
 
 1. `environments/dev/gitops`
-2. `environments/dev/kubernetes`
-3. `environments/dev/platform`
-4. `environments/dev/core`
+2. `environments/dev/observability`
+3. `environments/dev/kubernetes`
+4. `environments/dev/platform`
+5. `environments/dev/core`
 
 Keep:
 
@@ -328,10 +347,43 @@ efs_csi_addon_version            = "<approved-version>"
 
 Do not silently upgrade add-ons as part of unrelated changes.
 
+## Observability Roadmap
+
+Phase 9 introduces an independent observability state layer.
+
+Metrics flow:
+
+```text
+Kubernetes
+  -> kube-state-metrics / node-exporter / ServiceMonitors
+  -> Prometheus
+  -> Grafana
+```
+
+Logs flow:
+
+```text
+Kubernetes container logs
+  -> Grafana Alloy
+  -> Loki
+  -> Grafana
+```
+
+Phase breakdown:
+
+- Phase 9A: observability Terraform layer and Helm values scaffolding
+- Phase 9B: EBS CSI and persistent monitoring storage
+- Phase 9C: kube-prometheus-stack deployment validation
+- Phase 9D: Loki and Alloy deployment/configuration validation
+- Phase 9E: dashboards and alerts
+- Phase 9F: optional Grafana HTTPS ingress
+- Phase 9G: lifecycle testing
+
 ## Design Notes
 
 - `dev/core` and `dev/platform` are AWS-provider-only roots.
 - `dev/kubernetes` configures Kubernetes and Helm providers for runtime/bootstrap resources that do not require custom Argo CD resources at plan time.
+- `dev/observability` configures Kubernetes and Helm providers for monitoring/logging components after the EKS cluster and Kubernetes bootstrap layer exist.
 - `dev/gitops` configures the Kubernetes provider for Argo CD Application resources and is run only after Argo CD CRDs exist.
 - EFS mount targets use stable Availability Zone keys from `private_subnet_ids_by_az`, not unknown subnet IDs as `for_each` keys.
 - Broad module-level dependencies are avoided except `module.eks depends_on = [module.networking]`, which intentionally ensures NAT/private routing are complete before private nodes bootstrap.
