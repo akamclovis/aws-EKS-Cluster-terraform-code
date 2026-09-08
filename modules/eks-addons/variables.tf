@@ -37,6 +37,16 @@ variable "pod_identity_agent_addon_version" {
   default     = null
 }
 
+variable "ebs_csi_addon_version" {
+  description = "Approved EBS CSI add-on version for the EKS cluster version."
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.ebs_csi_addon_version)) > 0
+    error_message = "ebs_csi_addon_version must be pinned explicitly."
+  }
+}
+
 variable "tags" {
   description = "Common tags applied to EKS add-on resources."
   type        = map(string)

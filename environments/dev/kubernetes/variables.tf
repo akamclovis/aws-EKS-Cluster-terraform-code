@@ -34,6 +34,12 @@ variable "efs_storage_class_name" {
   default     = "efs-sc"
 }
 
+variable "gp3_observability_storage_class_name" {
+  description = "Kubernetes StorageClass name for observability EBS gp3 volumes."
+  type        = string
+  default     = "gp3-observability"
+}
+
 variable "alb_controller_service_account_name" {
   description = "Kubernetes ServiceAccount name for AWS Load Balancer Controller."
   type        = string

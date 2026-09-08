@@ -8,6 +8,7 @@ module "eks_addons" {
   coredns_addon_version            = var.coredns_addon_version
   kube_proxy_addon_version         = var.kube_proxy_addon_version
   pod_identity_agent_addon_version = var.pod_identity_agent_addon_version
+  ebs_csi_addon_version            = var.ebs_csi_addon_version
   tags                             = local.common_tags
 }
 

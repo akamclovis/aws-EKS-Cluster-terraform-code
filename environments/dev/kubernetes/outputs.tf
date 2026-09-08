@@ -3,6 +3,11 @@ output "efs_storage_class_name" {
   value       = kubernetes_storage_class_v1.efs.metadata[0].name
 }
 
+output "gp3_observability_storage_class_name" {
+  description = "Name of the Kubernetes StorageClass for observability EBS gp3 volumes."
+  value       = kubernetes_storage_class_v1.gp3_observability.metadata[0].name
+}
+
 output "alb_controller_service_account_name" {
   description = "Name of the AWS Load Balancer Controller ServiceAccount."
   value       = kubernetes_service_account_v1.aws_load_balancer_controller.metadata[0].name

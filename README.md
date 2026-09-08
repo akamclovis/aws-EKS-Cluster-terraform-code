@@ -343,6 +343,7 @@ coredns_addon_version            = "<approved-version>"
 kube_proxy_addon_version         = "<approved-version>"
 pod_identity_agent_addon_version = "<approved-version>"
 efs_csi_addon_version            = "<approved-version>"
+ebs_csi_addon_version            = "v1.65.0-eksbuild.1"
 ```
 
 Do not silently upgrade add-ons as part of unrelated changes.
@@ -372,12 +373,37 @@ Kubernetes container logs
 Phase breakdown:
 
 - Phase 9A: observability Terraform layer and Helm values scaffolding
-- Phase 9B: EBS CSI and persistent monitoring storage
+- Phase 9B: Amazon EBS CSI and gp3 persistent observability storage
 - Phase 9C: kube-prometheus-stack deployment validation
 - Phase 9D: Loki and Alloy deployment/configuration validation
 - Phase 9E: dashboards and alerts
 - Phase 9F: optional Grafana HTTPS ingress
 - Phase 9G: lifecycle testing
+
+Phase 9B storage flow:
+
+```text
+Prometheus
+  -> PVC
+  -> gp3-observability
+  -> Amazon EBS gp3
+
+Grafana
+  -> PVC
+  -> gp3-observability
+  -> Amazon EBS gp3
+
+Loki
+  -> PVC
+  -> gp3-observability
+  -> Amazon EBS gp3
+```
+
+`gp3-observability` is a non-default Kubernetes StorageClass owned by `dev/kubernetes`. It uses the Amazon EBS CSI provisioner, encrypted gp3 volumes, `WaitForFirstConsumer`, volume expansion, and `Delete` reclaim behavior.
+
+Alloy remains stateless. EFS remains available separately through `efs-sc` for RWX workloads. EBS provides RWO block storage for stateful monitoring workloads.
+
+This is still a disposable dev environment. Monitoring history is intentionally lost during full environment teardown: deleting the observability PVCs releases and deletes the backing EBS volumes through the StorageClass reclaim policy. Do not add finalizer workarounds or manual AWS volume cleanup for the normal dev lifecycle.
 
 ## Design Notes
 
@@ -385,6 +411,7 @@ Phase breakdown:
 - `dev/kubernetes` configures Kubernetes and Helm providers for runtime/bootstrap resources that do not require custom Argo CD resources at plan time.
 - `dev/observability` configures Kubernetes and Helm providers for monitoring/logging components after the EKS cluster and Kubernetes bootstrap layer exist.
 - `dev/gitops` configures the Kubernetes provider for Argo CD Application resources and is run only after Argo CD CRDs exist.
+- `dev/platform` owns EKS managed add-ons and their AWS IAM/Pod Identity resources, including the Amazon EBS CSI driver. EBS CSI permissions belong to the dedicated `ebs-csi-controller-sa` Pod Identity role, not to the EC2 node role.
 - EFS mount targets use stable Availability Zone keys from `private_subnet_ids_by_az`, not unknown subnet IDs as `for_each` keys.
 - Broad module-level dependencies are avoided except `module.eks depends_on = [module.networking]`, which intentionally ensures NAT/private routing are complete before private nodes bootstrap.
 - AWS Load Balancer Controller uses EKS Pod Identity, not IRSA. The ServiceAccount has no `eks.amazonaws.com/role-arn` annotation.

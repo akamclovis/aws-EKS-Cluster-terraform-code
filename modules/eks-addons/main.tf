@@ -69,3 +69,20 @@ resource "aws_eks_addon" "kube_proxy" {
     Name = "${var.name_prefix}-kube-proxy"
   })
 }
+
+resource "aws_eks_addon" "ebs_csi" {
+  cluster_name  = var.cluster_name
+  addon_name    = "aws-ebs-csi-driver"
+  addon_version = var.ebs_csi_addon_version
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "PRESERVE"
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-aws-ebs-csi-driver"
+  })
+
+  depends_on = [
+    aws_eks_pod_identity_association.ebs_csi
+  ]
+}

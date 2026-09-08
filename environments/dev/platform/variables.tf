@@ -76,6 +76,17 @@ variable "efs_csi_addon_version" {
   default     = null
 }
 
+variable "ebs_csi_addon_version" {
+  description = "Approved EBS CSI add-on version for EKS 1.35."
+  type        = string
+  default     = "v1.65.0-eksbuild.1"
+
+  validation {
+    condition     = length(trimspace(var.ebs_csi_addon_version)) > 0
+    error_message = "ebs_csi_addon_version must be pinned explicitly."
+  }
+}
+
 variable "route53_zone_name" {
   description = "Public Route53 hosted zone name ExternalDNS is allowed to manage. Set only in ignored local terraform.tfvars."
   type        = string

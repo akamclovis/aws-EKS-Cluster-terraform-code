@@ -19,6 +19,22 @@ resource "kubernetes_storage_class_v1" "efs" {
   }
 }
 
+resource "kubernetes_storage_class_v1" "gp3_observability" {
+  metadata {
+    name = var.gp3_observability_storage_class_name
+  }
+
+  storage_provisioner    = "ebs.csi.aws.com"
+  reclaim_policy         = "Delete"
+  volume_binding_mode    = "WaitForFirstConsumer"
+  allow_volume_expansion = true
+
+  parameters = {
+    type      = "gp3"
+    encrypted = "true"
+  }
+}
+
 resource "kubernetes_service_account_v1" "aws_load_balancer_controller" {
   metadata {
     name      = var.alb_controller_service_account_name

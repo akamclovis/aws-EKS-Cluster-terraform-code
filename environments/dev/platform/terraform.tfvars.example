@@ -12,5 +12,6 @@ coredns_addon_version            = "<PINNED_VERSION>"
 kube_proxy_addon_version         = "<PINNED_VERSION>"
 pod_identity_agent_addon_version = "<PINNED_VERSION>"
 efs_csi_addon_version            = "<PINNED_VERSION>"
+ebs_csi_addon_version            = "v1.65.0-eksbuild.1"
 
 route53_zone_name = "example.com"

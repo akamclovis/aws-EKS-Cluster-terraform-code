@@ -8,6 +8,16 @@ output "vpc_cni_pod_identity_association_id" {
   value       = module.eks_addons.vpc_cni_pod_identity_association_id
 }
 
+output "ebs_csi_role_arn" {
+  description = "ARN of the IAM role used by the EBS CSI driver through EKS Pod Identity."
+  value       = module.eks_addons.ebs_csi_role_arn
+}
+
+output "ebs_csi_pod_identity_association_id" {
+  description = "ID of the EBS CSI EKS Pod Identity association."
+  value       = module.eks_addons.ebs_csi_pod_identity_association_id
+}
+
 output "managed_addon_versions" {
   description = "EKS managed add-on versions selected or pinned for core add-ons."
   value       = module.eks_addons.managed_addon_versions

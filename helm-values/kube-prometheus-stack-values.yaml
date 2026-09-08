@@ -9,7 +9,12 @@ grafana:
   service:
     type: ClusterIP
   persistence:
-    enabled: false
+    enabled: true
+    type: pvc
+    storageClassName: gp3-observability
+    accessModes:
+      - ReadWriteOnce
+    size: 5Gi
   defaultDashboardsTimezone: browser
   resources:
     requests:
@@ -22,8 +27,16 @@ prometheus:
   ingress:
     enabled: false
   prometheusSpec:
-    retention: 6h
-    storageSpec: {}
+    retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3-observability
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 20Gi
     resources:
       requests:
         cpu: 200m
