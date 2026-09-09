@@ -3,7 +3,58 @@ commonLabels:
   project: eks-platform
   managed-by: terraform
 
+crds:
+  enabled: true
+  upgradeJob:
+    enabled: false
+
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    configReloaders: true
+    etcd: true
+    general: true
+    k8s: true
+    kubeApiserverAvailability: true
+    kubeApiserverBurnrate: true
+    kubeApiserverHistogram: true
+    kubeApiserverSlos: true
+    kubeControllerManager: true
+    kubelet: true
+    kubePrometheusGeneral: true
+    kubePrometheusNodeRecording: true
+    kubernetesApps: true
+    kubernetesResources: true
+    kubernetesStorage: true
+    kubernetesSystem: true
+    kubeSchedulerAlerting: true
+    kubeSchedulerRecording: true
+    kubeStateMetrics: true
+    network: true
+    node: true
+    nodeExporterAlerting: true
+    nodeExporterRecording: true
+    prometheus: true
+    prometheusOperator: true
+
 grafana:
+  enabled: true
+  defaultDashboardsEnabled: true
+  sidecar:
+    dashboards:
+      enabled: true
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: true
+      isDefaultDatasource: true
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      uid: loki
+      url: http://loki.monitoring.svc.cluster.local:3100
+      isDefault: false
   ingress:
     enabled: false
   service:
@@ -23,11 +74,80 @@ grafana:
     limits:
       memory: 512Mi
 
+kubeApiServer:
+  enabled: true
+
+kubelet:
+  enabled: true
+
+kubeControllerManager:
+  enabled: true
+
+coreDns:
+  enabled: true
+
+kubeDns:
+  enabled: false
+
+kubeEtcd:
+  enabled: true
+
+kubeScheduler:
+  enabled: true
+
+kubeProxy:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true
+
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+nodeExporter:
+  enabled: true
+
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+prometheusOperator:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
 prometheus:
+  enabled: true
   ingress:
     enabled: false
+  service:
+    type: ClusterIP
   prometheusSpec:
+    replicas: 1
     retention: 7d
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector: {}
+    ruleNamespaceSelector: {}
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -45,9 +165,13 @@ prometheus:
         memory: 1Gi
 
 alertmanager:
+  enabled: true
   ingress:
     enabled: false
+  service:
+    type: ClusterIP
   alertmanagerSpec:
+    replicas: 1
     storage: {}
     resources:
       requests:

@@ -9,6 +9,13 @@ resource "helm_release" "kube_prometheus_stack" {
     file("${path.module}/../../../helm-values/kube-prometheus-stack-values.yaml")
   ]
 
+  set_sensitive = var.grafana_admin_password == null ? [] : [
+    {
+      name  = "grafana.adminPassword"
+      value = var.grafana_admin_password
+    }
+  ]
+
   depends_on = [
     kubernetes_namespace_v1.monitoring
   ]

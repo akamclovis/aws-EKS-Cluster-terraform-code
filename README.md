@@ -361,6 +361,15 @@ Kubernetes
   -> Grafana
 ```
 
+Phase 9C metrics flow:
+
+```text
+Kubernetes metrics
+  -> node-exporter / kube-state-metrics / kubelet / ServiceMonitors
+  -> Prometheus
+  -> Grafana
+```
+
 Logs flow:
 
 ```text
@@ -370,12 +379,30 @@ Kubernetes container logs
   -> Grafana
 ```
 
+Phase 9D logging flow:
+
+```text
+Kubernetes Pod Logs
+  -> Grafana Alloy DaemonSet
+  -> label / relabel / process
+  -> Loki Monolithic
+  -> Grafana Explore
+```
+
+Alerts flow:
+
+```text
+PrometheusRules
+  -> Prometheus
+  -> Alertmanager
+```
+
 Phase breakdown:
 
 - Phase 9A: observability Terraform layer and Helm values scaffolding
 - Phase 9B: Amazon EBS CSI and gp3 persistent observability storage
-- Phase 9C: kube-prometheus-stack deployment validation
-- Phase 9D: Loki and Alloy deployment/configuration validation
+- Phase 9C: kube-prometheus-stack dev configuration, selectors, CRDs, dashboards, and default rules
+- Phase 9D: Loki monolithic logging and Grafana Alloy node-local collection
 - Phase 9E: dashboards and alerts
 - Phase 9F: optional Grafana HTTPS ingress
 - Phase 9G: lifecycle testing
@@ -404,6 +431,24 @@ Loki
 Alloy remains stateless. EFS remains available separately through `efs-sc` for RWX workloads. EBS provides RWO block storage for stateful monitoring workloads.
 
 This is still a disposable dev environment. Monitoring history is intentionally lost during full environment teardown: deleting the observability PVCs releases and deletes the backing EBS volumes through the StorageClass reclaim policy. Do not add finalizer workarounds or manual AWS volume cleanup for the normal dev lifecycle.
+
+Phase 9C keeps kube-prometheus-stack as the single owner for Prometheus Operator, Prometheus, Grafana, Alertmanager, kube-state-metrics, node-exporter, ServiceMonitor CRDs, PodMonitor CRDs, default Kubernetes dashboards, and default Prometheus alerting/recording rules.
+
+Prometheus is configured for a small dev cluster: one replica, `7d` retention, and a `20Gi` `gp3-observability` PVC. Grafana is internal-only with a `ClusterIP` service, no Ingress, no public DNS, no ACM, and a `5Gi` `gp3-observability` PVC. Alertmanager is internal-only with one replica, no Ingress, no public DNS, and no external receivers configured in Phase 9C.
+
+Prometheus ServiceMonitor, PodMonitor, and PrometheusRule selectors are intentionally open across namespaces. GitOps applications can later create their own ServiceMonitor or PodMonitor resources without Terraform adding application-specific monitors to the observability state. Do not add nginx-demo monitoring objects until the later application-observability phase.
+
+On initial installation, Helm installs kube-prometheus-stack CRDs. Helm does not automatically upgrade CRDs from a chart's `crds/` directory during later upgrades, so future kube-prometheus-stack chart upgrades must include an explicit CRD compatibility and upgrade review. Do not add `kubectl`, `local-exec`, or manual CRD automation to this Terraform layer.
+
+Phase 9D keeps Loki internal-only and monolithic for dev. Loki uses filesystem storage on a single `20Gi` `gp3-observability` PVC, internal `ClusterIP` services only, authentication disabled for internal single-tenant dev use, and `168h` log retention. The Loki StatefulSet PVC retention policy is configured to delete PVCs when the StatefulSet is deleted or scaled down so normal Terraform destroy removes the Helm release, StatefulSet, PVC, PV, and backing EBS volume through the StorageClass `Delete` reclaim policy.
+
+Alloy runs as a stateless DaemonSet. The Helm chart provides the node name through the `HOSTNAME` environment variable, and Alloy uses a Kubernetes pod field selector for `spec.nodeName` so each DaemonSet instance discovers pod logs for its own node instead of watching and processing every pod in the cluster. Alloy does not need AWS IAM or EKS Pod Identity for this path.
+
+Loki labels are intentionally low-cardinality: `namespace`, `pod`, `container`, `app`, and `node`. Dynamic identifiers such as pod UID, container ID, request ID, trace ID, timestamps, random hashes, and broad annotations must not be promoted to indexed Loki labels.
+
+Grafana gets Loki as an additional internal datasource at `http://loki.monitoring.svc.cluster.local:3100`. Prometheus remains the default metrics datasource managed by kube-prometheus-stack. Loki, Alloy, and Grafana are not exposed publicly in Phase 9D.
+
+This EBS-backed monolithic Loki design is intentionally small and disposable for development. A production Loki architecture would normally move toward object storage such as S3 and a more scalable deployment model after a separate design review.
 
 ## Design Notes
 

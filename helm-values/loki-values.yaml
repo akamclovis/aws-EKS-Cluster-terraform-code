@@ -4,6 +4,12 @@ loki:
   auth_enabled: false
   commonConfig:
     replication_factor: 1
+  limits_config:
+    retention_period: 168h
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+    working_directory: /var/loki/compactor
   storage:
     type: filesystem
   schemaConfig:
@@ -18,8 +24,18 @@ loki:
 
 singleBinary:
   replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 768Mi
   persistence:
     enabled: true
+    enableStatefulSetAutoDeletePVC: true
+    whenDeleted: Delete
+    whenScaled: Delete
     storageClass: gp3-observability
     accessModes:
       - ReadWriteOnce

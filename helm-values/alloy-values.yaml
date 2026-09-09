@@ -1,7 +1,30 @@
 controller:
   type: daemonset
 
+rbac:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources: ["pods", "pods/log", "namespaces"]
+      verbs: ["get", "list", "watch"]
+  clusterRules:
+    - apiGroups: [""]
+      resources: ["nodes"]
+      verbs: ["get", "list", "watch"]
+
+serviceAccount:
+  create: true
+  annotations: {}
+
 alloy:
+  extraEnv:
+    - name: HOSTNAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+  mounts:
+    varlog: false
+    dockercontainers: false
   configMap:
     content: |-
       logging {
@@ -11,6 +34,11 @@ alloy:
 
       discovery.kubernetes "pods" {
         role = "pod"
+
+        selectors {
+          role  = "pod"
+          field = "spec.nodeName=" + coalesce(sys.env("HOSTNAME"), constants.hostname)
+        }
       }
 
       discovery.relabel "pod_logs" {
@@ -32,6 +60,11 @@ alloy:
         }
 
         rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+
+        rule {
           source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
           target_label  = "app"
         }
@@ -39,12 +72,18 @@ alloy:
 
       loki.source.kubernetes "pod_logs" {
         targets    = discovery.relabel.pod_logs.output
+        forward_to = [loki.process.pod_logs.receiver]
+      }
+
+      loki.process "pod_logs" {
+        stage.cri {}
+
         forward_to = [loki.write.default.receiver]
       }
 
       loki.write "default" {
         endpoint {
-          url = "http://loki:3100/loki/api/v1/push"
+          url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
         }
       }
 
@@ -53,4 +92,5 @@ alloy:
       cpu: 50m
       memory: 128Mi
     limits:
+      cpu: 200m
       memory: 256Mi
